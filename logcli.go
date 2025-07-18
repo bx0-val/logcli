@@ -15,8 +15,17 @@ type Entry struct {
 	Message string    `xml:"message"`
 }
 
+type Log struct {
+	XMLName xml.Name `xml:"log"`
+	Entries []*Entry `xml:"entry"`
+}
+
 func (m Entry) String() string {
 	return fmt.Sprintf("Message id=%v, date=%v, logmessage=%v", m.Id, m.Date, m.Message)
+}
+
+func (l Log) String() string {
+	return fmt.Sprintf("Entries: ", l.Entries)
 }
 
 func check(e error) {
@@ -39,17 +48,30 @@ func main() {
 	message := os.Args[1]
 
 	if message == "print" {
+
 		data, err := os.ReadFile(installDir)
-		check(err)
+		if os.IsNotExist(err) {
+			println("No log file found. Make a log entry to create it.")
+			os.Exit(0)
+		}
 
 		println(string(data))
 		os.Exit(0)
 	}
 
-	entryExample1 := &Entry{Id: 1, Date: time.Now(), Message: message}
-	out, _ := xml.MarshalIndent(entryExample1, "", "\t")
+	entry := &Log{}
+	tempEntry := &Entry{Id: 1, Date: time.Now(), Message: message}
+	entry.Entries = []*Entry{tempEntry}
+	out, _ := xml.MarshalIndent(entry, "", "\t")
 
-	println(xml.Header, string(out))
+	var in Log
+	if err := xml.Unmarshal(out, &in); err != nil {
+		panic(err)
+	}
+
+	// println(in)
+
+	println("Inserted " + in.String() + " at " + installDir)
 
 	err := os.WriteFile(installDir, out, 0644)
 	check(err)

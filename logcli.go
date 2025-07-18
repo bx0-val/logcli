@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -18,18 +19,39 @@ func (m Entry) String() string {
 	return fmt.Sprintf("Message id=%v, date=%v, logmessage=%v", m.Id, m.Date, m.Message)
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 func main() {
 
 	if len(os.Args) < 2 {
-		fmt.Println("here will be the git commit like program that opens a log in memory like it does in nano. lets you modify the message. review git commit for more details.")
-	} else {
-		message := os.Args[1]
-
-		entryExample1 := &Entry{Id: 1, Date: time.Now(), Message: message}
-		out, _ := xml.MarshalIndent(entryExample1, "", "\t")
-
-		println(xml.Header, string(out))
+		fmt.Println("Usage: logcli '<INSERT MEANINGFUL MESSAGE HERE>'")
+		fmt.Println("\n\nin the future, when logcli is called with no args, there will a program similar to an empty git commit.\n a log in memory is opening in nano. you can modify the message, save and close to push.")
+		os.Exit(1)
 	}
 
-	// err := os.WriteFile("~/.logcli")
+	homeDir, _ := os.UserHomeDir()
+	installDir := filepath.Join(homeDir, ".logcli")
+
+	message := os.Args[1]
+
+	if message == "print" {
+		data, err := os.ReadFile(installDir)
+		check(err)
+
+		println(string(data))
+		os.Exit(0)
+	}
+
+	entryExample1 := &Entry{Id: 1, Date: time.Now(), Message: message}
+	out, _ := xml.MarshalIndent(entryExample1, "", "\t")
+
+	println(xml.Header, string(out))
+
+	err := os.WriteFile(installDir, out, 0644)
+	check(err)
+
 }

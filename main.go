@@ -25,7 +25,7 @@ func (m Entry) String() string {
 }
 
 func (l Log) String() string {
-	return fmt.Sprintf("Entries: ", l.Entries)
+	return fmt.Sprintf("Entries: %v", l.Entries)
 }
 
 func check(e error) {
@@ -37,13 +37,13 @@ func check(e error) {
 func main() {
 
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: logcli '<INSERT MEANINGFUL MESSAGE HERE>'")
-		fmt.Println("\n\nin the future, when logcli is called with no args, there will a program similar to an empty git commit.\n a log in memory is opening in nano. you can modify the message, save and close to push.")
+		fmt.Println("Usage: oplog '<INSERT MEANINGFUL MESSAGE HERE>'")
+		fmt.Println("\n\nin the future, when oplog is called with no args, there will a program similar to an empty git commit.\n a log in memory is opening in nano. you can modify the message, save and close to push.")
 		os.Exit(1)
 	}
 
 	homeDir, _ := os.UserHomeDir()
-	installDir := filepath.Join(homeDir, ".logcli")
+	installDir := filepath.Join(homeDir, ".oplog")
 
 	message := os.Args[1]
 
@@ -59,19 +59,20 @@ func main() {
 		os.Exit(0)
 	}
 
-	entry := &Log{}
-	tempEntry := &Entry{Id: 1, Date: time.Now(), Message: message}
-	entry.Entries = []*Entry{tempEntry}
-	out, _ := xml.MarshalIndent(entry, "", "\t")
+	var entry Log
 
-	var in Log
-	if err := xml.Unmarshal(out, &in); err != nil {
-		panic(err)
+	data, fileNotExistErr := os.ReadFile(installDir)
+	if os.IsNotExist(fileNotExistErr) {
+		tempEntry := &Entry{Id: 1, Date: time.Now(), Message: message}
+		entry.Entries = []*Entry{tempEntry}
+	} else {
+		if err := xml.Unmarshal(data, &entry); err != nil {
+			panic(err)
+		}
+		entry.Entries = append(entry.Entries, &Entry{Id: entry.Entries[len(entry.Entries)-1].Id + 1, Date: time.Now(), Message: message})
 	}
 
-	// println(in)
-
-	println("Inserted " + in.String() + " at " + installDir)
+	out, _ := xml.MarshalIndent(entry, "", "\t")
 
 	err := os.WriteFile(installDir, out, 0644)
 	check(err)

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/jlaffaye/ftp"
 )
 
 type Entry struct {
@@ -34,6 +37,13 @@ func check(e error) {
 	}
 }
 
+func sync(installDir string) {
+	client, _ := ftp.Dial(os.Getenv("FTP_SITE"), ftp.DialWithTimeout(5*time.Second))
+	_ = client.Login(os.Getenv("FTP_USERNAME"), os.Getenv("FTP_PASSWORD"))
+	data, _ := os.ReadFile(installDir)
+	client.Stor("oplog.txt", bytes.NewReader(data))
+}
+
 func main() {
 
 	if len(os.Args) < 2 {
@@ -59,6 +69,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if message == "sync" {
+		sync(installDir)
+		os.Exit(0)
+	}
+
 	var entry Log
 
 	data, fileNotExistErr := os.ReadFile(installDir)
@@ -76,5 +91,5 @@ func main() {
 
 	err := os.WriteFile(installDir, out, 0644)
 	check(err)
-
+	sync(installDir)
 }

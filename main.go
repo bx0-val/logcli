@@ -1,21 +1,22 @@
 package main
 
 import (
-	"bytes"
 	"encoding/xml"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/jlaffaye/ftp"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
 type Entry struct {
-	XMLName xml.Name  `xml:"entry"`
-	Id      int       `xml:"id,attr"`
-	Date    time.Time `xml:"date"`
-	Message string    `xml:"message"`
+	XMLName xml.Name `xml:"entry"`
+	Id      int      `xml:"id,attr"`
+	Date    string   `xml:"date,attr"`
+	Message string   `xml:"message,attr"`
 }
 
 type Log struct {
@@ -38,10 +39,35 @@ func check(e error) {
 }
 
 func sync(installDir string) {
-	client, _ := ftp.Dial(os.Getenv("FTP_SITE"), ftp.DialWithTimeout(5*time.Second))
-	_ = client.Login(os.Getenv("FTP_USERNAME"), os.Getenv("FTP_PASSWORD"))
-	data, _ := os.ReadFile(installDir)
-	client.Stor("oplog.txt", bytes.NewReader(data))
+	FTP_SITE := os.Getenv("FTP_SITE")
+	FTP_USERNAME := os.Getenv("FTP_USERNAME")
+	FTP_PASSWORD := os.Getenv("FTP_PASSWORD")
+
+	config := &ssh.ClientConfig{
+		User: FTP_USERNAME,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(FTP_PASSWORD),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	client, tcp_err := ssh.Dial("tcp", FTP_SITE, config)
+	if tcp_err != nil {
+		log.Fatal("failed to dial: ", tcp_err)
+	}
+	defer client.Close()
+
+	sftp_client, _ := sftp.NewClient(client)
+	defer sftp_client.Close()
+
+	file, _ := sftp_client.Create("oplog.xml")
+	file_data, _ := os.ReadFile(installDir)
+	if _, err := file.Write(file_data); err != nil {
+		log.Fatal(err)
+	}
+
+	file.Close()
+
 }
 
 func main() {
@@ -75,21 +101,21 @@ func main() {
 	}
 
 	var entry Log
+	timeStr := time.Now().Format("2006-01-02 3:04PM")
 
 	data, fileNotExistErr := os.ReadFile(installDir)
 	if os.IsNotExist(fileNotExistErr) {
-		tempEntry := &Entry{Id: 1, Date: time.Now(), Message: message}
+		tempEntry := &Entry{Id: 1, Date: timeStr, Message: message}
 		entry.Entries = []*Entry{tempEntry}
 	} else {
 		if err := xml.Unmarshal(data, &entry); err != nil {
 			panic(err)
 		}
-		entry.Entries = append(entry.Entries, &Entry{Id: entry.Entries[len(entry.Entries)-1].Id + 1, Date: time.Now(), Message: message})
+		entry.Entries = append(entry.Entries, &Entry{Id: entry.Entries[len(entry.Entries)-1].Id + 1, Date: timeStr, Message: message})
 	}
 
 	out, _ := xml.MarshalIndent(entry, "", "\t")
 
 	err := os.WriteFile(installDir, out, 0644)
 	check(err)
-	sync(installDir)
 }
